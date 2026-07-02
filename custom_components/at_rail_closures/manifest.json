@@ -10,5 +10,5 @@
   "issue_tracker": "https://github.com/al4spn/AKTransportCalendar/issues",
   "requirements": ["beautifulsoup4>=4.12.0"],
   "single_config_entry": true,
-  "version": "0.3.0"
+  "version": "0.4.0"
 }
