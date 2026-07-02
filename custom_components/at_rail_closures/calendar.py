@@ -1,14 +1,16 @@
-"""Calendars of planned Auckland rail closures.
+"""Calendar of planned Auckland rail closures.
 
-One combined calendar merges closures covering the same period into a single
-all-day event ("Full closure 9-12 July" shows once even when AT lists it per
-line). In addition, each enabled line gets its own calendar so dashboard
-cards can colour-code events per line.
+A single calendar where each affected line gets its own event, titled with
+the line name ("Southern Line – Full closure"). Events carry exact start and
+end times when the source provides them (alerts feed timestamps, or clock
+times such as "until 12pm" parsed from the announcement text); otherwise
+they are all-day events. Only lines enabled in the integration options
+produce events.
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.core import HomeAssistant
@@ -18,7 +20,7 @@ from homeassistant.util import dt as dt_util
 from .const import CLOSURES_URL
 from .coordinator import ATRailConfigEntry
 from .entity import ATRailEntity
-from .parser import Closure, closures_for_line, merged_closures
+from .parser import NZ_TZ, Closure
 
 
 async def async_setup_entry(
@@ -26,32 +28,62 @@ async def async_setup_entry(
     entry: ATRailConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the calendars."""
-    coordinator = entry.runtime_data
-    entities: list[CalendarEntity] = [RailClosuresCalendar(coordinator)]
-    entities.extend(
-        LineClosuresCalendar(coordinator, line)
-        for line in coordinator.enabled_lines
+    """Set up the calendar."""
+    async_add_entities([RailClosuresCalendar(entry.runtime_data)])
+
+
+def _to_event(closure: Closure, line: str) -> CalendarEvent:
+    kind = "Full closure" if closure.closure_type == "full" else "Partial closure"
+    summary = f"{line} – {kind}"
+    description = f"{closure.description}\n\nMore info: {CLOSURES_URL}"
+
+    if closure.is_all_day:
+        return CalendarEvent(
+            summary=summary,
+            # All-day events use exclusive end dates.
+            start=closure.start,
+            end=closure.end + timedelta(days=1),
+            description=description,
+            location="Auckland rail network",
+        )
+
+    start = closure.start_dt or datetime.combine(closure.start, time.min, NZ_TZ)
+    end = closure.end_dt or datetime.combine(
+        closure.end + timedelta(days=1), time.min, NZ_TZ
     )
-    async_add_entities(entities)
-
-
-def _to_event(closure: Closure, summary: str) -> CalendarEvent:
     return CalendarEvent(
         summary=summary,
-        # All-day events use exclusive end dates.
-        start=closure.start,
-        end=closure.end + timedelta(days=1),
-        description=f"{closure.description}\n\nMore info: {CLOSURES_URL}",
+        start=start,
+        end=end,
+        description=description,
         location="Auckland rail network",
     )
 
 
-class RailClosuresCalendarBase(ATRailEntity, CalendarEntity):
-    """Shared event logic for the closure calendars."""
+class RailClosuresCalendar(ATRailEntity, CalendarEntity):
+    """Calendar entity exposing closures as per-line events."""
+
+    _attr_translation_key = "closures"
+    _attr_icon = "mdi:calendar-remove"
+
+    def __init__(self, coordinator) -> None:
+        super().__init__(coordinator, "calendar")
 
     def _events(self) -> list[CalendarEvent]:
-        raise NotImplementedError
+        enabled = self.coordinator.enabled_lines
+        events: list[CalendarEvent] = []
+        seen: set[tuple] = set()
+        for closure in self.coordinator.data.closures:
+            for line in closure.lines:
+                if line not in enabled:
+                    continue
+                key = (line, closure.start, closure.end, closure.closure_type)
+                if key in seen:
+                    continue
+                seen.add(key)
+                events.append(_to_event(closure, line))
+        events.sort(key=lambda e: (e.start_datetime_local, e.summary))
+        return events
 
     @property
     def event(self) -> CalendarEvent | None:
@@ -72,43 +104,3 @@ class RailClosuresCalendarBase(ATRailEntity, CalendarEntity):
             if event.start_datetime_local < end_date
             and event.end_datetime_local > start_date
         ]
-
-
-class RailClosuresCalendar(RailClosuresCalendarBase):
-    """Combined calendar: closures across all lines, merged per period."""
-
-    _attr_translation_key = "closures"
-    _attr_icon = "mdi:calendar-remove"
-
-    def __init__(self, coordinator) -> None:
-        super().__init__(coordinator, "calendar")
-
-    def _events(self) -> list[CalendarEvent]:
-        return [
-            _to_event(closure, closure.title)
-            for closure in merged_closures(self.coordinator.data.closures)
-        ]
-
-
-class LineClosuresCalendar(RailClosuresCalendarBase):
-    """Calendar of closures affecting a single line."""
-
-    _attr_translation_key = "line_closures"
-    _attr_icon = "mdi:calendar-remove"
-
-    def __init__(self, coordinator, line: str) -> None:
-        key = line.lower().replace(" ", "_")
-        super().__init__(coordinator, f"calendar_{key}")
-        self._line = line
-        self._attr_translation_placeholders = {"line": line}
-
-    def _events(self) -> list[CalendarEvent]:
-        events = []
-        for closure in closures_for_line(
-            self.coordinator.data.closures, self._line
-        ):
-            kind = (
-                "Full closure" if closure.closure_type == "full" else "Partial closure"
-            )
-            events.append(_to_event(closure, kind))
-        return events

@@ -34,13 +34,18 @@ def _async_remove_disabled_line_entities(
     entry: ATRailConfigEntry,
     coordinator: ATRailClosuresCoordinator,
 ) -> None:
-    """Drop registry entries for lines the user has deselected."""
+    """Drop registry entries for lines the user has deselected.
+
+    Also removes the per-line calendar entities that existed in 0.3.x
+    (closure events are per-line within the single calendar now).
+    """
     registry = er.async_get(hass)
     stale_unique_ids: set[str] = set()
-    for line in set(RAIL_LINES) - set(coordinator.enabled_lines):
+    for line in RAIL_LINES:
         key = line.lower().replace(" ", "_")
-        stale_unique_ids.add(f"{entry.entry_id}_{key}")
         stale_unique_ids.add(f"{entry.entry_id}_calendar_{key}")
+        if line not in coordinator.enabled_lines:
+            stale_unique_ids.add(f"{entry.entry_id}_{key}")
     for entity in er.async_entries_for_config_entry(registry, entry.entry_id):
         if entity.unique_id in stale_unique_ids:
             registry.async_remove(entity.entity_id)

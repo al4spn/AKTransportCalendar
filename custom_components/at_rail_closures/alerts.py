@@ -14,13 +14,10 @@ as JSON. AT has used two envelope shapes over time, both handled here:
 
 from __future__ import annotations
 
-from datetime import date, datetime, tzinfo
+from datetime import date, datetime, time, timedelta, tzinfo
 from typing import Any
-from zoneinfo import ZoneInfo
 
-from .parser import Closure
-
-NZ_TZ = ZoneInfo("Pacific/Auckland")
+from .parser import NZ_TZ, Closure
 
 # GTFS route_id fragments for Auckland's rail lines. AT route ids have looked
 # like "STH-201"; match on the token rather than the exact id.
@@ -93,14 +90,32 @@ def _rail_lines(informed_entities: Any) -> tuple[str, ...]:
     return tuple(lines)
 
 
-def _to_date(timestamp: Any, tz: tzinfo) -> date | None:
+def _to_datetime(timestamp: Any, tz: tzinfo) -> datetime | None:
     try:
         value = int(timestamp)
     except (TypeError, ValueError):
         return None
     if value <= 0:
         return None
-    return datetime.fromtimestamp(value, tz).date()
+    return datetime.fromtimestamp(value, tz)
+
+
+def _end_date(end_dt: datetime) -> date:
+    """The last calendar day a period covers.
+
+    An end at exactly midnight means "through the end of the previous day"
+    (common GTFS convention), so it must not spill into the next date.
+    """
+    if end_dt.time() == time.min:
+        return (end_dt - timedelta(seconds=1)).date()
+    return end_dt.date()
+
+
+def _is_effectively_all_day(start_dt: datetime, end_dt: datetime) -> bool:
+    """True when the period covers whole days (midnight to ~midnight)."""
+    return start_dt.time() == time.min and (
+        end_dt.time() == time.min or end_dt.time() >= time(23, 59)
+    )
 
 
 def parse_service_alerts(
@@ -141,16 +156,27 @@ def parse_service_alerts(
         for period in periods:
             if not isinstance(period, dict):
                 continue
-            start = _to_date(period.get("start"), tz)
-            end = _to_date(period.get("end"), tz)
-            if start is None and end is None:
-                # No period at all: treat as active right now.
-                start = end = reference
-            elif start is None:
+            start_dt = _to_datetime(period.get("start"), tz)
+            end_dt = _to_datetime(period.get("end"), tz)
+
+            if start_dt is None and end_dt is None:
+                # No period at all: treat as active right now, all day.
+                start, end = reference, reference
+            elif start_dt is None:
+                end = _end_date(end_dt)
                 start = min(reference, end)
-            elif end is None:
+            elif end_dt is None:
                 # Open-ended alert: ongoing while it remains in the feed.
+                start = start_dt.date()
                 end = max(reference, start)
+                end_dt = None
+                if start_dt.time() == time.min:
+                    start_dt = None
+            else:
+                start = start_dt.date()
+                end = _end_date(end_dt)
+                if _is_effectively_all_day(start_dt, end_dt):
+                    start_dt = end_dt = None
             if end < start:
                 continue
 
@@ -167,6 +193,8 @@ def parse_service_alerts(
                     description=text,
                     source_heading=header,
                     source="alerts",
+                    start_dt=start_dt,
+                    end_dt=end_dt,
                 )
             )
 

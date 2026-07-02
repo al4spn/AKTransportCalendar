@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
 
 from at_rail_closures.parser import (
+    NZ_TZ,
     RAIL_LINES,
     active_closures,
     closures_for_line,
-    merged_closures,
     parse_closures,
     upcoming_closures,
 )
@@ -102,20 +102,20 @@ def test_recent_past_dates_stay_in_current_year():
     assert {c.start for c in closures} == {date(2026, 6, 13), date(2026, 6, 20)}
 
 
-def test_merged_closures_combines_lines(closures):
-    merged = merged_closures(closures)
-    july_full = [
-        c
-        for c in merged
-        if c.start == date(2026, 7, 9) and c.closure_type == "full"
-    ]
-    assert len(july_full) == 1
-    assert set(july_full[0].lines) == {
-        "Southern Line",
-        "Western Line",
-        "Onehunga Line",
-    }
-    assert "Full closure" in july_full[0].title
+def test_clock_times_extracted(closures):
+    southern = closures_for_line(closures, "Southern Line")
+    partial_4_july = [c for c in southern if c.start == date(2026, 7, 4)][0]
+    # "Partial closure until 12pm ... on Saturday 4 July"
+    assert partial_4_july.start_dt is None
+    assert partial_4_july.end_dt == datetime(2026, 7, 4, 12, 0, tzinfo=NZ_TZ)
+    assert not partial_4_july.is_all_day
+
+
+def test_multi_day_closure_without_times_is_all_day(closures):
+    onehunga = closures_for_line(closures, "Onehunga Line")
+    july = [c for c in onehunga if c.start == date(2026, 7, 9)][0]
+    assert july.is_all_day
+    assert july.start_dt is None and july.end_dt is None
 
 
 def test_titles(closures):

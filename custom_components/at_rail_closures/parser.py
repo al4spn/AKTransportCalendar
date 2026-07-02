@@ -17,10 +17,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from bs4 import BeautifulSoup
 from bs4.element import Tag
+
+NZ_TZ = ZoneInfo("Pacific/Auckland")
 
 RAIL_LINES = ("Southern Line", "Eastern Line", "Western Line", "Onehunga Line")
 
@@ -81,6 +84,14 @@ _MONTH_YEAR_HEADING_RE = re.compile(
     rf"^\s*{_MONTH_RE}\s+(\d{{4}})\s*$", re.IGNORECASE
 )
 
+# Clock times like "until 12pm", "from 8.30pm", "until 11:59 am".
+_UNTIL_TIME_RE = re.compile(
+    r"\buntil\s+(\d{1,2})(?:[:.](\d{2}))?\s*([ap])\.?m\b", re.IGNORECASE
+)
+_FROM_TIME_RE = re.compile(
+    r"\bfrom\s+(\d{1,2})(?:[:.](\d{2}))?\s*([ap])\.?m\b", re.IGNORECASE
+)
+
 _FULL_RE = re.compile(
     r"full closure|closure of the entire|fully closed|no trains? (?:will run|running)? ?on",
     re.IGNORECASE,
@@ -107,6 +118,10 @@ class Closure:
     description: str
     source_heading: str = ""
     source: str = "website"  # "website" or "alerts"
+    # Exact NZ-local start/end when known (alerts feed timestamps, or a
+    # clock time parsed from the announcement text). None = all-day.
+    start_dt: datetime | None = None
+    end_dt: datetime | None = None
 
     @property
     def title(self) -> str:
@@ -116,6 +131,10 @@ class Closure:
         kind = "Full closure" if self.closure_type == "full" else "Partial closure"
         return f"{lines} – {kind}"
 
+    @property
+    def is_all_day(self) -> bool:
+        return self.start_dt is None and self.end_dt is None
+
     def is_active(self, today: date) -> bool:
         return self.start <= today <= self.end
 
@@ -123,7 +142,7 @@ class Closure:
         return self.start > today
 
     def as_dict(self) -> dict:
-        return {
+        result = {
             "title": self.title,
             "lines": list(self.lines),
             "start": self.start.isoformat(),
@@ -132,6 +151,11 @@ class Closure:
             "description": self.description,
             "source": self.source,
         }
+        if self.start_dt is not None:
+            result["start_time"] = self.start_dt.isoformat()
+        if self.end_dt is not None:
+            result["end_time"] = self.end_dt.isoformat()
+        return result
 
 
 @dataclass
@@ -247,6 +271,23 @@ def _closure_type(text: str) -> str:
     return "partial" if _PARTIAL_RE.search(text) else "full"
 
 
+def _parse_clock(match: re.Match) -> time:
+    hour = int(match.group(1)) % 12
+    if match.group(3).lower() == "p":
+        hour += 12
+    return time(hour, int(match.group(2) or 0))
+
+
+def _extract_clock_times(text: str) -> tuple[time | None, time | None]:
+    """Pull "from 8pm" / "until 12pm" style clock times out of a block."""
+    start_match = _FROM_TIME_RE.search(text)
+    end_match = _UNTIL_TIME_RE.search(text)
+    return (
+        _parse_clock(start_match) if start_match else None,
+        _parse_clock(end_match) if end_match else None,
+    )
+
+
 def _find_content_root(soup: BeautifulSoup) -> Tag:
     for selector in (
         "main",
@@ -310,6 +351,7 @@ def parse_closures(html: str, reference: date) -> list[Closure]:
             continue
 
         closure_type = _closure_type(text)
+        start_clock, end_clock = _extract_clock_times(text)
         for start, end in block_dates:
             key = (block_lines, start, end, closure_type, text)
             if key in seen:
@@ -323,6 +365,16 @@ def parse_closures(html: str, reference: date) -> list[Closure]:
                     closure_type=closure_type,
                     description=text,
                     source_heading=context.heading,
+                    start_dt=(
+                        datetime.combine(start, start_clock, NZ_TZ)
+                        if start_clock
+                        else None
+                    ),
+                    end_dt=(
+                        datetime.combine(end, end_clock, NZ_TZ)
+                        if end_clock
+                        else None
+                    ),
                 )
             )
 
@@ -349,37 +401,3 @@ def closures_for_line(closures: list[Closure], line: str) -> list[Closure]:
     return [c for c in closures if line in c.lines]
 
 
-def merged_closures(closures: list[Closure]) -> list[Closure]:
-    """Merge closures that share a period and type into one record per event.
-
-    Useful for calendar presentation: "Full closure 9-12 July" reported as
-    three per-line bullets becomes one event covering all three lines.
-    """
-    grouped: dict[tuple, list[Closure]] = {}
-    for closure in closures:
-        grouped.setdefault((closure.start, closure.end, closure.closure_type), []).append(
-            closure
-        )
-
-    merged: list[Closure] = []
-    for (start, end, closure_type), group in grouped.items():
-        lines: list[str] = []
-        descriptions: list[str] = []
-        for closure in group:
-            for line in closure.lines:
-                if line not in lines:
-                    lines.append(line)
-            if closure.description not in descriptions:
-                descriptions.append(closure.description)
-        merged.append(
-            Closure(
-                lines=tuple(sorted(lines, key=RAIL_LINES.index)),
-                start=start,
-                end=end,
-                closure_type=closure_type,
-                description=" | ".join(descriptions),
-                source_heading=group[0].source_heading,
-            )
-        )
-    merged.sort(key=lambda c: (c.start, c.end, c.lines))
-    return merged

@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
 
 from at_rail_closures.alerts import combine_sources, parse_service_alerts
-from at_rail_closures.parser import Closure
+from at_rail_closures.parser import NZ_TZ, Closure
 
 FIXTURE = Path(__file__).parent / "fixtures" / "service_alerts.json"
 TODAY = date(2026, 7, 2)
@@ -34,13 +34,17 @@ def test_full_closure_dates_converted_to_nz_days(closures):
     assert full[0].end == date(2026, 7, 12)
     assert set(full[0].lines) == {"Southern Line", "Onehunga Line", "Western Line"}
     assert "Buses replace trains" in full[0].description
+    # Midnight-to-23:59 periods are normalized to all-day.
+    assert full[0].is_all_day
 
 
-def test_same_day_partial_closure(closures):
+def test_same_day_partial_closure_keeps_exact_times(closures):
     eastern = [c for c in closures if c.lines == ("Eastern Line",)]
     assert len(eastern) == 1
     assert eastern[0].start == eastern[0].end == date(2026, 7, 4)
     assert eastern[0].closure_type == "partial"
+    assert eastern[0].start_dt == datetime(2026, 7, 4, 6, 0, tzinfo=NZ_TZ)
+    assert eastern[0].end_dt == datetime(2026, 7, 4, 12, 0, tzinfo=NZ_TZ)
 
 
 def test_open_ended_alert_tracks_reference_date(closures):
@@ -49,6 +53,8 @@ def test_open_ended_alert_tracks_reference_date(closures):
     assert western[0].start == date(2026, 7, 1)
     assert western[0].end == TODAY  # ongoing while the alert stays in feed
     assert western[0].closure_type == "partial"
+    assert western[0].start_dt == datetime(2026, 7, 1, 4, 0, tzinfo=NZ_TZ)
+    assert western[0].end_dt is None
 
 
 def test_plain_gtfs_rt_envelope():
