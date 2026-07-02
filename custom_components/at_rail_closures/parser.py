@@ -140,6 +140,21 @@ class Closure:
     def is_active(self, today: date) -> bool:
         return self.start <= today <= self.end
 
+    def is_active_at(self, now: datetime) -> bool:
+        """Whether the closure is in effect at this moment.
+
+        Time-aware: a "from 9:30pm" night-works closure is only active from
+        9:30pm, not all day. Closures without exact times fall back to
+        whole-day semantics.
+        """
+        if not self.is_active(now.date()):
+            return False
+        if self.start_dt is not None and now < self.start_dt:
+            return False
+        if self.end_dt is not None and now > self.end_dt:
+            return False
+        return True
+
     def is_upcoming(self, today: date) -> bool:
         return self.start > today
 
@@ -430,6 +445,10 @@ def parse_closures(html: str, reference: date) -> list[Closure]:
 
 def active_closures(closures: list[Closure], today: date) -> list[Closure]:
     return [c for c in closures if c.is_active(today)]
+
+
+def active_closures_at(closures: list[Closure], now: datetime) -> list[Closure]:
+    return [c for c in closures if c.is_active_at(now)]
 
 
 def upcoming_closures(

@@ -28,7 +28,9 @@ All entities belong to one **Auckland Rail Network** device:
 | `sensor.auckland_rail_network_network_status` | enum | `good_service`, `reduced_service` (partial closure today) or `closures_active` (full closure today). Attributes carry the full `active_closures` and `upcoming_closures` lists. |
 | `sensor.auckland_rail_network_southern_line` (also `_eastern_line`, `_western_line`, `_onehunga_line`) | enum | `good_service`, `partial_closure` or `closed` for that line, with that line's upcoming closures as attributes. |
 | `sensor.auckland_rail_network_next_closure` | timestamp | Start of the next planned closure — renders as "in 5 days" on tile cards. Title, lines, dates and description in attributes. |
-| `binary_sensor.auckland_rail_network_closure_active` | problem | On while any planned closure is in effect. Handy for conditional cards and automations. |
+| `sensor.auckland_rail_network_southern_line_next_closure` (and the other lines) | timestamp | Start of that line's next planned closure. |
+| `binary_sensor.auckland_rail_network_closure_active` | problem | On while any planned closure is in effect *right now* (time-aware: a "from 9:30pm" closure only turns on from 9:30pm). |
+| `binary_sensor.auckland_rail_network_southern_line_closure_active` (and the other lines) | problem | Same, per line — ideal for "is my line down?" automations. |
 | `calendar.auckland_rail_network_closures` | calendar | Every planned closure as an event per affected line, titled with the line name (e.g. "Southern Line – Full closure"). Events carry exact start/end times when the source provides them (API timestamps, or "until 12pm" style text); otherwise they are all-day events. |
 
 Which lines get status sensors and calendar events is selectable

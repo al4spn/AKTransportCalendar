@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, date
+from datetime import date, datetime, time
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
@@ -24,8 +24,9 @@ from .const import (
 from .coordinator import ATRailConfigEntry
 from .entity import ATRailEntity
 from .parser import (
+    NZ_TZ,
     Closure,
-    active_closures,
+    active_closures_at,
     closures_for_line,
     upcoming_closures,
 )
@@ -42,14 +43,36 @@ async def async_setup_entry(
         NetworkStatusSensor(coordinator),
         NextClosureSensor(coordinator),
     ]
-    entities.extend(
-        LineStatusSensor(coordinator, line) for line in coordinator.enabled_lines
-    )
+    for line in coordinator.enabled_lines:
+        entities.append(LineStatusSensor(coordinator, line))
+        entities.append(LineNextClosureSensor(coordinator, line))
     async_add_entities(entities)
+
+
+def _now() -> datetime:
+    return dt_util.now()
 
 
 def _today() -> date:
     return dt_util.now().date()
+
+
+def _next_closure_attrs(nxt: Closure, today: date) -> dict[str, Any]:
+    return {
+        "title": nxt.title,
+        "lines": list(nxt.lines),
+        "start": nxt.start.isoformat(),
+        "end": nxt.end.isoformat(),
+        "closure_type": nxt.closure_type,
+        "description": nxt.description,
+        "in_days": (nxt.start - today).days,
+    }
+
+
+def _next_closure_timestamp(nxt: Closure) -> datetime:
+    if nxt.start_dt is not None:
+        return nxt.start_dt
+    return datetime.combine(nxt.start, time.min, NZ_TZ)
 
 
 class NetworkStatusSensor(ATRailEntity, SensorEntity):
@@ -69,7 +92,7 @@ class NetworkStatusSensor(ATRailEntity, SensorEntity):
 
     @property
     def native_value(self) -> str:
-        active = active_closures(self.coordinator.data.closures, _today())
+        active = active_closures_at(self.coordinator.data.closures, _now())
         if any(c.closure_type == "full" for c in active):
             return STATE_CLOSURES_ACTIVE
         if active:
@@ -80,7 +103,7 @@ class NetworkStatusSensor(ATRailEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         closures = self.coordinator.data.closures
         today = _today()
-        active = active_closures(closures, today)
+        active = active_closures_at(closures, _now())
         upcoming = upcoming_closures(closures, today, UPCOMING_WINDOW_DAYS)
         attrs: dict[str, Any] = {
             "active_closures": [c.as_dict() for c in active[:MAX_ATTR_CLOSURES]],
@@ -122,24 +145,12 @@ class NextClosureSensor(ATRailEntity, SensorEntity):
     @property
     def native_value(self) -> datetime | None:
         nxt = self._next()
-        if nxt is None:
-            return None
-        return dt_util.start_of_local_day(nxt.start)
+        return _next_closure_timestamp(nxt) if nxt else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         nxt = self._next()
-        if nxt is None:
-            return {}
-        return {
-            "title": nxt.title,
-            "lines": list(nxt.lines),
-            "start": nxt.start.isoformat(),
-            "end": nxt.end.isoformat(),
-            "closure_type": nxt.closure_type,
-            "description": nxt.description,
-            "in_days": (nxt.start - _today()).days,
-        }
+        return _next_closure_attrs(nxt, _today()) if nxt else {}
 
 
 class LineStatusSensor(ATRailEntity, SensorEntity):
@@ -161,7 +172,7 @@ class LineStatusSensor(ATRailEntity, SensorEntity):
 
     @property
     def native_value(self) -> str:
-        active = active_closures(self._line_closures(), _today())
+        active = active_closures_at(self._line_closures(), _now())
         if any(c.closure_type == "full" for c in active):
             return LINE_STATE_CLOSED
         if active:
@@ -172,7 +183,7 @@ class LineStatusSensor(ATRailEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         closures = self._line_closures()
         today = _today()
-        active = active_closures(closures, today)
+        active = active_closures_at(closures, _now())
         upcoming = upcoming_closures(closures, today, UPCOMING_WINDOW_DAYS)
         attrs: dict[str, Any] = {
             "line": self._line,
@@ -182,4 +193,37 @@ class LineStatusSensor(ATRailEntity, SensorEntity):
         if upcoming:
             attrs["next_closure_start"] = upcoming[0].start.isoformat()
             attrs["next_closure_in_days"] = (upcoming[0].start - today).days
+        return attrs
+
+
+class LineNextClosureSensor(ATRailEntity, SensorEntity):
+    """Timestamp of the next upcoming closure for a single line."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:calendar-alert"
+
+    def __init__(self, coordinator, line: str) -> None:
+        key = line.lower().replace(" ", "_")
+        super().__init__(coordinator, f"{key}_next_closure")
+        self._line = line
+        self._attr_translation_key = "line_next_closure"
+        self._attr_translation_placeholders = {"line": line}
+
+    def _next(self) -> Closure | None:
+        upcoming = upcoming_closures(
+            closures_for_line(self.coordinator.data.closures, self._line),
+            _today(),
+        )
+        return upcoming[0] if upcoming else None
+
+    @property
+    def native_value(self) -> datetime | None:
+        nxt = self._next()
+        return _next_closure_timestamp(nxt) if nxt else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        nxt = self._next()
+        attrs = _next_closure_attrs(nxt, _today()) if nxt else {}
+        attrs["line"] = self._line
         return attrs
