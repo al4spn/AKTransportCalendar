@@ -5,10 +5,12 @@
         "title": "Auckland Transport Rail Closures",
         "description": "Track planned rail closures from the Auckland Transport website. Optionally add a free AT API key (dev-portal.at.govt.nz) to also merge in the official service alerts feed for live disruptions.",
         "data": {
-          "api_key": "AT API key (optional)"
+          "api_key": "AT API key (optional)",
+          "lines": "Rail lines to track"
         },
         "data_description": {
-          "api_key": "Subscription key from dev-portal.at.govt.nz. Leave empty to use website scraping only."
+          "api_key": "Subscription key from dev-portal.at.govt.nz. Leave empty to use website scraping only.",
+          "lines": "Each selected line gets its own status sensor and closures calendar."
         }
       }
     },
@@ -26,11 +28,13 @@
       "init": {
         "data": {
           "update_hours": "Update interval (hours)",
-          "api_key": "AT API key (optional)"
+          "api_key": "AT API key (optional)",
+          "lines": "Rail lines to track"
         },
         "data_description": {
           "update_hours": "How often to re-check the AT website for changes.",
-          "api_key": "Subscription key from dev-portal.at.govt.nz. Clear the field to disable the service alerts feed."
+          "api_key": "Subscription key from dev-portal.at.govt.nz. Clear the field to disable the service alerts feed.",
+          "lines": "Each selected line gets its own status sensor and closures calendar. Deselecting a line removes its entities."
         }
       }
     },
@@ -69,6 +73,9 @@
     "calendar": {
       "closures": {
         "name": "Closures"
+      },
+      "line_closures": {
+        "name": "{line} closures"
       }
     }
   }
