@@ -1,1 +1,197 @@
-# AKTransportCalendar
+# Auckland Transport Rail Closures for Home Assistant
+
+A custom integration that scrapes Auckland Transport's
+[planned rail closures](https://at.govt.nz/bus-train-ferry/service-announcements/planned-rail-closures)
+page and turns it into Home Assistant entities: an overall network status, a
+status sensor per rail line, the next upcoming closure, and a calendar of all
+planned closures.
+
+No account or API key is required.
+
+## Entities
+
+All entities belong to one **Auckland Rail Network** device:
+
+| Entity | Type | What it shows |
+|---|---|---|
+| `sensor.auckland_rail_network_network_status` | enum | `good_service`, `reduced_service` (partial closure today) or `closures_active` (full closure today). Attributes carry the full `active_closures` and `upcoming_closures` lists. |
+| `sensor.auckland_rail_network_southern_line` (also `_eastern_line`, `_western_line`, `_onehunga_line`) | enum | `good_service`, `partial_closure` or `closed` for that line, with that line's upcoming closures as attributes. |
+| `sensor.auckland_rail_network_next_closure` | timestamp | Start of the next planned closure — renders as "in 5 days" on tile cards. Title, lines, dates and description in attributes. |
+| `binary_sensor.auckland_rail_network_closure_active` | problem | On while any planned closure is in effect. Handy for conditional cards and automations. |
+| `calendar.auckland_rail_network_closures` | calendar | Every planned closure as an all-day event (closures spanning the same dates are merged into one event). |
+
+The website is re-checked every 6 hours by default (configurable from the
+integration's **Configure** button, 1–24 hours).
+
+## Installation
+
+### HACS (recommended)
+
+1. HACS → three-dot menu → **Custom repositories**.
+2. Add `al4spn/AKTransportCalendar` with category **Integration**.
+3. Search for "Auckland Transport Rail Closures" in HACS and download it.
+4. Restart Home Assistant.
+5. Settings → Devices & Services → **Add Integration** → "Auckland Transport
+   Rail Closures".
+
+### Manual
+
+Copy `custom_components/at_rail_closures` into your `config/custom_components`
+directory, restart, then add the integration as above.
+
+## Dashboard
+
+### Network status overview (markdown card)
+
+A single card with a headline status and the list of upcoming closures:
+
+```yaml
+type: markdown
+title: Auckland Rail Network
+content: |
+  {% set s = 'sensor.auckland_rail_network_network_status' %}
+  {% set status = states(s) %}
+  {% if status == 'good_service' %}
+  ## 🟢 Good service
+  No planned closures today.
+  {% elif status == 'reduced_service' %}
+  ## 🟠 Reduced service
+  {% for c in state_attr(s, 'active_closures') %}
+  **{{ c.title }}** — {{ c.description }}
+  {% endfor %}
+  {% else %}
+  ## 🔴 Closures in place
+  {% for c in state_attr(s, 'active_closures') %}
+  **{{ c.title }}** — {{ c.description }}
+  {% endfor %}
+  {% endif %}
+
+  {% set upcoming = state_attr(s, 'upcoming_closures') or [] %}
+  {% if upcoming %}
+  ### Upcoming closures
+  {% for c in upcoming %}
+  - **{{ as_datetime(c.start).strftime('%a %-d %b') }}
+    {%- if c.end != c.start %} – {{ as_datetime(c.end).strftime('%a %-d %b') }}{% endif %}**:
+    {{ c.title }}
+  {% endfor %}
+  {% else %}
+  *No upcoming closures announced.*
+  {% endif %}
+
+  ---
+  *[Details on at.govt.nz]({{ state_attr(s, 'source') }})*
+```
+
+### Per-line tiles
+
+```yaml
+type: grid
+columns: 2
+square: false
+cards:
+  - type: tile
+    entity: sensor.auckland_rail_network_southern_line
+    name: Southern
+    color: red
+  - type: tile
+    entity: sensor.auckland_rail_network_eastern_line
+    name: Eastern
+    color: yellow
+  - type: tile
+    entity: sensor.auckland_rail_network_western_line
+    name: Western
+    color: green
+  - type: tile
+    entity: sensor.auckland_rail_network_onehunga_line
+    name: Onehunga
+    color: blue
+```
+
+(Colours match AT's line colours; tiles show the translated state such as
+"Good service" or "Closed".)
+
+### Closures calendar
+
+Works with the built-in calendar card, or custom cards such as Calendar Card
+Pro / Atomic Calendar Revive:
+
+```yaml
+type: calendar
+entities:
+  - calendar.auckland_rail_network_closures
+initial_view: listMonth
+```
+
+```yaml
+type: custom:calendar-card-pro
+title: Planned rail closures
+entities:
+  - entity: calendar.auckland_rail_network_closures
+    color: '#e4002b'
+days_to_show: 60
+show_countdown: true
+```
+
+### Alert banner only when something is wrong
+
+```yaml
+type: conditional
+conditions:
+  - condition: state
+    entity: binary_sensor.auckland_rail_network_closure_active
+    state: "on"
+card:
+  type: markdown
+  content: >-
+    ⚠️ **Rail closure in effect** —
+    {{ state_attr('binary_sensor.auckland_rail_network_closure_active',
+       'closures') | map(attribute='title') | join(', ') }}
+```
+
+## Automation ideas
+
+Get a phone notification the evening before a closure starts:
+
+```yaml
+triggers:
+  - trigger: calendar
+    entity_id: calendar.auckland_rail_network_closures
+    event: start
+    offset: "-08:00:00"   # all-day events start at midnight → fires 4pm the day before
+actions:
+  - action: notify.mobile_app_your_phone
+    data:
+      title: Rail closure from tomorrow
+      message: >-
+        {{ trigger.calendar_event.summary }}:
+        {{ trigger.calendar_event.description }}
+mode: queued
+```
+
+## How the scraping works (and its limits)
+
+Auckland Transport does not publish a machine-readable feed for planned
+closures, so this integration parses the announcement web page itself:
+
+- Requests are sent with normal browser headers (the site returns
+  HTTP 403 to non-browser clients).
+- The parser walks the page's headings and bullet points, extracting rail
+  line names, NZ-style dates ("Saturday 4 July", "9 to 12 July",
+  "26 December 2026 to 11 January 2027") and whether each closure is full or
+  partial. Missing years are inferred from the current date and any
+  "July 2026"-style section headings.
+- If AT restructures the page, parsing may degrade. The integration logs a
+  warning when a fetch succeeds but no closures are found, and keeps the last
+  good data while fetches fail. Please open an issue with a copy of the page
+  if that happens.
+
+## Development
+
+```bash
+pip install beautifulsoup4 pytest
+pytest tests/
+```
+
+The parser (`custom_components/at_rail_closures/parser.py`) has no Home
+Assistant dependencies and is covered by tests against a fixture of the AT
+page in `tests/fixtures/`.

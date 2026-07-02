@@ -1,0 +1,59 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Auckland Transport Rail Closures",
+        "description": "Track planned rail closures from the Auckland Transport website. No account or API key is required."
+      }
+    },
+    "abort": {
+      "already_configured": "Already configured. Only one instance is needed.",
+      "single_instance_allowed": "Already configured. Only one instance is needed."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "update_hours": "Update interval (hours)"
+        },
+        "data_description": {
+          "update_hours": "How often to re-check the AT website for changes."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "network_status": {
+        "name": "Network status",
+        "state": {
+          "good_service": "Good service",
+          "reduced_service": "Reduced service",
+          "closures_active": "Closures in place"
+        }
+      },
+      "next_closure": {
+        "name": "Next closure"
+      },
+      "line_status": {
+        "name": "{line}",
+        "state": {
+          "good_service": "Good service",
+          "partial_closure": "Partial closure",
+          "closed": "Closed"
+        }
+      }
+    },
+    "binary_sensor": {
+      "closure_active": {
+        "name": "Closure active"
+      }
+    },
+    "calendar": {
+      "closures": {
+        "name": "Closures"
+      }
+    }
+  }
+}
