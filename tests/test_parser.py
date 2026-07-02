@@ -2,17 +2,12 @@
 
 from __future__ import annotations
 
-import sys
 from datetime import date
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(
-    0, str(Path(__file__).parents[1] / "custom_components" / "at_rail_closures")
-)
-
-from parser import (  # noqa: E402
+from at_rail_closures.parser import (
     RAIL_LINES,
     active_closures,
     closures_for_line,

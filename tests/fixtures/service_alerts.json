@@ -1,0 +1,110 @@
+{
+  "status": "OK",
+  "response": {
+    "header": {
+      "gtfs_realtime_version": "1.0",
+      "incrementality": 0,
+      "timestamp": 1782880000
+    },
+    "entity": [
+      {
+        "id": "alert-rail-full",
+        "alert": {
+          "active_period": [{ "start": 1783512000, "end": 1783857540 }],
+          "informed_entity": [
+            { "route_id": "STH-201", "route_type": 2 },
+            { "route_id": "ONE-201", "route_type": 2 },
+            { "route_id": "WEST-201" }
+          ],
+          "cause": "MAINTENANCE",
+          "effect": "NO_SERVICE",
+          "header_text": {
+            "translation": [
+              { "text": "Rail closure: Southern, Onehunga and Western lines", "language": "en" }
+            ]
+          },
+          "description_text": {
+            "translation": [
+              {
+                "text": "Buses replace trains from Thursday 9 to Sunday 12 July while KiwiRail carries out maintenance.",
+                "language": "en"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "alert-rail-partial-morning",
+        "alert": {
+          "active_period": [{ "start": 1783101600, "end": 1783123200 }],
+          "informed_entity": [{ "route_id": "EAST-201", "route_type": 2 }],
+          "cause": "CONSTRUCTION",
+          "effect": "REDUCED_SERVICE",
+          "header_text": {
+            "translation": [
+              { "text": "Eastern Line reduced service Saturday morning", "language": "en" }
+            ]
+          },
+          "description_text": {
+            "translation": [
+              { "text": "Trains run every 20 minutes until midday.", "language": "en" }
+            ]
+          }
+        }
+      },
+      {
+        "id": "alert-rail-open-ended",
+        "alert": {
+          "active_period": [{ "start": 1782835200 }],
+          "informed_entity": [{ "route_id": "WEST-201", "route_type": 2 }],
+          "cause": "UNKNOWN_CAUSE",
+          "effect": "SIGNIFICANT_DELAYS",
+          "header_text": {
+            "translation": [
+              { "text": "Western Line delays", "language": "en" }
+            ]
+          },
+          "description_text": {
+            "translation": [
+              { "text": "Delays of up to 15 minutes due to a track fault near Henderson.", "language": "en" }
+            ]
+          }
+        }
+      },
+      {
+        "id": "alert-bus-ignored",
+        "alert": {
+          "active_period": [{ "start": 1783512000, "end": 1783857540 }],
+          "informed_entity": [{ "route_id": "NX1-203", "route_type": 3 }],
+          "cause": "CONSTRUCTION",
+          "effect": "DETOUR",
+          "header_text": {
+            "translation": [{ "text": "Northern Express detour", "language": "en" }]
+          }
+        }
+      },
+      {
+        "id": "alert-stop-only-ignored",
+        "alert": {
+          "active_period": [{ "start": 1783512000, "end": 1783857540 }],
+          "informed_entity": [{ "stop_id": "0133-abc123" }],
+          "effect": "NO_SERVICE",
+          "header_text": {
+            "translation": [{ "text": "Stop closed", "language": "en" }]
+          }
+        }
+      },
+      {
+        "id": "alert-no-effect-ignored",
+        "alert": {
+          "active_period": [{ "start": 1783512000, "end": 1783857540 }],
+          "informed_entity": [{ "route_id": "STH-201", "route_type": 2 }],
+          "effect": "NO_EFFECT",
+          "header_text": {
+            "translation": [{ "text": "Timetable reminder", "language": "en" }]
+          }
+        }
+      }
+    ]
+  }
+}

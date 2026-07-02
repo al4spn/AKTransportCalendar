@@ -1,12 +1,23 @@
 # Auckland Transport Rail Closures for Home Assistant
 
-A custom integration that scrapes Auckland Transport's
-[planned rail closures](https://at.govt.nz/bus-train-ferry/service-announcements/planned-rail-closures)
-page and turns it into Home Assistant entities: an overall network status, a
-status sensor per rail line, the next upcoming closure, and a calendar of all
-planned closures.
+A custom integration that tracks Auckland rail network closures and turns
+them into Home Assistant entities: an overall network status, a status sensor
+per rail line, the next upcoming closure, and a calendar of all planned
+closures.
 
-No account or API key is required.
+It combines two sources:
+
+1. **AT's [planned rail closures](https://at.govt.nz/bus-train-ferry/service-announcements/planned-rail-closures)
+   page** (scraped) — the long-range closure programme, announced months
+   ahead. Works with no account or API key.
+2. **AT's official GTFS-realtime service alerts feed** (optional, needs a
+   free API key from the [AT developer portal](https://dev-portal.at.govt.nz/)) —
+   authoritative, structured data with exact timestamps, including *unplanned*
+   disruptions (delays, faults) the web page never shows.
+
+When both sources report the same closure, the API record wins. Closures the
+API doesn't know about yet (e.g. next month's programme) still come from the
+web page, so the calendar keeps its long horizon.
 
 ## Entities
 
@@ -33,6 +44,15 @@ integration's **Configure** button, 1–24 hours).
 4. Restart Home Assistant.
 5. Settings → Devices & Services → **Add Integration** → "Auckland Transport
    Rail Closures".
+6. Optionally paste an AT API key (see below) — or add one later via the
+   integration's **Configure** button.
+
+### Getting an AT API key (optional but recommended)
+
+1. Register (free) at the [AT developer portal](https://dev-portal.at.govt.nz/).
+2. Subscribe to a product that includes the **Realtime API** (service alerts).
+3. Copy your subscription key into the integration's config or options flow.
+   The key is validated against the API when you save it.
 
 ### Manual
 
@@ -168,10 +188,27 @@ actions:
 mode: queued
 ```
 
-## How the scraping works (and its limits)
+## How the data sources work (and their limits)
 
-Auckland Transport does not publish a machine-readable feed for planned
-closures, so this integration parses the announcement web page itself:
+### Service alerts API (with an API key)
+
+The [GTFS-realtime service alerts feed](https://dev-portal.at.govt.nz/realtime-api)
+is polled with your subscription key. Alerts affecting rail routes
+(Southern/Eastern/Western/Onehunga) with a service-reducing effect
+(`NO_SERVICE`, `REDUCED_SERVICE`, `SIGNIFICANT_DELAYS`, …) become closure
+records with exact active periods. `NO_SERVICE` maps to a full closure,
+everything else to a partial one. Open-ended alerts are treated as ongoing
+while they remain in the feed. Alerts feeds are operational, so they may not
+carry the multi-month forward programme — that's why the page scraper stays.
+
+The `network status` sensor exposes `website_ok` and `alerts_feed`
+attributes so you can see the health of each source at a glance.
+
+### Website scraper
+
+Auckland Transport does not publish a machine-readable feed of the
+*long-range* closure programme, so that part is parsed from the announcement
+web page itself:
 
 - Requests are sent with normal browser headers (the site returns
   HTTP 403 to non-browser clients).

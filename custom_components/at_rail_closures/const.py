@@ -19,6 +19,9 @@ REQUEST_HEADERS = {
     "Accept-Language": "en-NZ,en;q=0.9",
 }
 
+SERVICE_ALERTS_URL = "https://api.at.govt.nz/realtime/legacy/servicealerts"
+
+CONF_API_KEY = "api_key"
 CONF_UPDATE_HOURS = "update_hours"
 DEFAULT_UPDATE_HOURS = 6
 

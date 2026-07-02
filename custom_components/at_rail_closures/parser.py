@@ -106,6 +106,7 @@ class Closure:
     closure_type: str  # "full" or "partial"
     description: str
     source_heading: str = ""
+    source: str = "website"  # "website" or "alerts"
 
     @property
     def title(self) -> str:
@@ -129,6 +130,7 @@ class Closure:
             "end": self.end.isoformat(),
             "closure_type": self.closure_type,
             "description": self.description,
+            "source": self.source,
         }
 
 

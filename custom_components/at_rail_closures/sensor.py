@@ -87,6 +87,12 @@ class NetworkStatusSensor(ATRailEntity, SensorEntity):
             "upcoming_count": len(upcoming),
             "last_checked": self.coordinator.data.fetched_at.isoformat(),
             "source": CLOSURES_URL,
+            "website_ok": self.coordinator.data.website_ok,
+            "alerts_feed": (
+                "not_configured"
+                if self.coordinator.data.alerts_ok is None
+                else ("ok" if self.coordinator.data.alerts_ok else "error")
+            ),
         }
         if upcoming:
             nxt = upcoming[0]
