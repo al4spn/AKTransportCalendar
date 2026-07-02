@@ -56,6 +56,9 @@
       "next_closure": {
         "name": "Next closure"
       },
+      "line_next_closure": {
+        "name": "{line} next closure"
+      },
       "line_status": {
         "name": "{line}",
         "state": {
@@ -68,6 +71,9 @@
     "binary_sensor": {
       "closure_active": {
         "name": "Closure active"
+      },
+      "line_closure_active": {
+        "name": "{line} closure active"
       }
     },
     "calendar": {

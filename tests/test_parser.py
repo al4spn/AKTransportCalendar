@@ -157,6 +157,26 @@ def test_titles(closures):
     assert eastern.title == "Eastern Line – Partial closure"
 
 
+def test_is_active_at_is_time_aware():
+    html = """
+    <main><h3>Southern Line</h3><ul>
+    <li>The Southern line is closed for overnight works from 9:30pm on
+    Thursday 2 July.</li>
+    <li>Full closure from Thursday 9 to Sunday 12 July.</li>
+    </ul></main>
+    """
+    closures = parse_closures(html, TODAY)
+    night = [c for c in closures if c.start == date(2026, 7, 2)][0]
+    assert night.start_dt == datetime(2026, 7, 2, 21, 30, tzinfo=NZ_TZ)
+    # Afternoon: not yet active; late evening: active.
+    assert not night.is_active_at(datetime(2026, 7, 2, 15, 0, tzinfo=NZ_TZ))
+    assert night.is_active_at(datetime(2026, 7, 2, 22, 0, tzinfo=NZ_TZ))
+
+    all_day = [c for c in closures if c.start == date(2026, 7, 9)][0]
+    assert all_day.is_active_at(datetime(2026, 7, 10, 3, 0, tzinfo=NZ_TZ))
+    assert not all_day.is_active_at(datetime(2026, 7, 13, 3, 0, tzinfo=NZ_TZ))
+
+
 def test_no_closures_in_empty_page():
     assert parse_closures("<html><body><p>Nothing here</p></body></html>", TODAY) == []
 

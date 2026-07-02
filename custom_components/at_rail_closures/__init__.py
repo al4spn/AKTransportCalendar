@@ -46,6 +46,8 @@ def _async_remove_disabled_line_entities(
         stale_unique_ids.add(f"{entry.entry_id}_calendar_{key}")
         if line not in coordinator.enabled_lines:
             stale_unique_ids.add(f"{entry.entry_id}_{key}")
+            stale_unique_ids.add(f"{entry.entry_id}_{key}_next_closure")
+            stale_unique_ids.add(f"{entry.entry_id}_{key}_closure_active")
     for entity in er.async_entries_for_config_entry(registry, entry.entry_id):
         if entity.unique_id in stale_unique_ids:
             registry.async_remove(entity.entity_id)
