@@ -1,0 +1,14 @@
+{
+  "domain": "at_rail_closures",
+  "name": "Auckland Transport Rail Closures",
+  "codeowners": ["@al4spn"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/al4spn/AKTransportCalendar",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/al4spn/AKTransportCalendar/issues",
+  "requirements": ["beautifulsoup4>=4.12.0"],
+  "single_config_entry": true,
+  "version": "0.2.0"
+}
