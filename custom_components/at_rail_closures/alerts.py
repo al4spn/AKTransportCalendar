@@ -17,7 +17,7 @@ from __future__ import annotations
 from datetime import date, datetime, time, timedelta, tzinfo
 from typing import Any
 
-from .parser import NZ_TZ, Closure
+from .parser import NZ_TZ, Closure, looks_like_full_closure
 
 # GTFS route_id fragments for Auckland's rail lines. AT route ids have looked
 # like "STH-201"; match on the token rather than the exact id.
@@ -149,6 +149,11 @@ def parse_service_alerts(
         text = " — ".join(part for part in (header, description) if part)
         if not text:
             text = f"Service alert ({effect.replace('_', ' ').title()})"
+        # AT sometimes tags full closures with a weaker effect code
+        # ("Full Network Closure" alerts carrying REDUCED_SERVICE); trust
+        # an explicit full-closure announcement in the text.
+        if closure_type == "partial" and looks_like_full_closure(text):
+            closure_type = "full"
 
         periods = alert.get("active_period")
         if not isinstance(periods, list) or not periods:

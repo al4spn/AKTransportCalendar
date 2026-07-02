@@ -93,7 +93,9 @@ _FROM_TIME_RE = re.compile(
 )
 
 _FULL_RE = re.compile(
-    r"full closure|closure of the entire|fully closed|no trains? (?:will run|running)? ?on",
+    r"full (?:network )?closure|closure of the entire|fully closed"
+    r"|all (?:train )?lines (?:are|will be) closed"
+    r"|no trains? (?:will run|running)? ?on",
     re.IGNORECASE,
 )
 _PARTIAL_RE = re.compile(
@@ -265,10 +267,49 @@ def _extract_dates(
     return ranges
 
 
+def looks_like_full_closure(text: str) -> bool:
+    """Whether free text announces a full (rather than partial) closure."""
+    return _FULL_RE.search(text) is not None
+
+
 def _closure_type(text: str) -> str:
-    if _FULL_RE.search(text):
+    if looks_like_full_closure(text):
         return "full"
     return "partial" if _PARTIAL_RE.search(text) else "full"
+
+
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+
+
+def _split_into_segments(
+    text: str, reference: date, year_hint: int | None
+) -> list[tuple[str, list[tuple[date, date]]]]:
+    """Split a block into sentence-level segments, each with its own dates.
+
+    AT often packs several closures into one bullet ("Partial closure until
+    12pm ... on 4 July. Full closure from 9 to 12 July."), so classification
+    and clock times must not leak between sentences. Undated sentences are
+    attached to the preceding dated sentence (they carry detail like "Rail
+    buses replace trains"); undated leading sentences prefix the first
+    segment.
+    """
+    segments: list[list] = []
+    leading: list[str] = []
+    for sentence in _SENTENCE_SPLIT_RE.split(text):
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+        dates = _extract_dates(sentence, reference, year_hint)
+        if dates:
+            if leading and not segments:
+                sentence = " ".join([*leading, sentence])
+            leading = []
+            segments.append([sentence, dates])
+        elif segments:
+            segments[-1][0] += f" {sentence}"
+        else:
+            leading.append(sentence)
+    return [(seg_text, dates) for seg_text, dates in segments]
 
 
 def _parse_clock(match: re.Match) -> time:
@@ -344,39 +385,44 @@ def parse_closures(html: str, reference: date) -> list[Closure]:
             continue
 
         block_lines = _detect_lines(text) or context.lines
-        block_dates = _extract_dates(text, reference, context.year_hint) or list(
-            context.dates
-        )
-        if not block_lines or not block_dates:
+        if not block_lines:
             continue
 
-        closure_type = _closure_type(text)
-        start_clock, end_clock = _extract_clock_times(text)
-        for start, end in block_dates:
-            key = (block_lines, start, end, closure_type, text)
-            if key in seen:
+        segments = _split_into_segments(text, reference, context.year_hint)
+        if not segments:
+            # No dated sentence in the block: fall back to heading dates.
+            if not context.dates:
                 continue
-            seen.add(key)
-            closures.append(
-                Closure(
-                    lines=block_lines,
-                    start=start,
-                    end=end,
-                    closure_type=closure_type,
-                    description=text,
-                    source_heading=context.heading,
-                    start_dt=(
-                        datetime.combine(start, start_clock, NZ_TZ)
-                        if start_clock
-                        else None
-                    ),
-                    end_dt=(
-                        datetime.combine(end, end_clock, NZ_TZ)
-                        if end_clock
-                        else None
-                    ),
+            segments = [(text, list(context.dates))]
+
+        for seg_text, seg_dates in segments:
+            closure_type = _closure_type(seg_text)
+            start_clock, end_clock = _extract_clock_times(seg_text)
+            for start, end in seg_dates:
+                key = (block_lines, start, end, closure_type, seg_text)
+                if key in seen:
+                    continue
+                seen.add(key)
+                closures.append(
+                    Closure(
+                        lines=block_lines,
+                        start=start,
+                        end=end,
+                        closure_type=closure_type,
+                        description=seg_text,
+                        source_heading=context.heading,
+                        start_dt=(
+                            datetime.combine(start, start_clock, NZ_TZ)
+                            if start_clock
+                            else None
+                        ),
+                        end_dt=(
+                            datetime.combine(end, end_clock, NZ_TZ)
+                            if end_clock
+                            else None
+                        ),
+                    )
                 )
-            )
 
     closures.sort(key=lambda c: (c.start, c.end, c.lines))
     return closures

@@ -93,6 +93,38 @@ def test_upcoming_window(closures):
     assert date(2026, 6, 29) not in starts
 
 
+def test_multi_closure_sentence_run_is_split_per_sentence():
+    # Regression: AT packs several closures into one bullet. The full-closure
+    # classification and "until 12pm" clock time must not leak between them.
+    html = """
+    <main><h3>Southern Line</h3><ul><li>Southern Line: Partial closure until
+    12pm between Waitematā and Newmarket on 4 July. Full closure from 9 to
+    12 July. Partial closure until 12pm between Waitematā and Newmarket on
+    25 July.</li></ul></main>
+    """
+    closures = parse_closures(html, TODAY)
+    assert len(closures) == 3
+
+    first = [c for c in closures if c.start == date(2026, 7, 4)][0]
+    assert first.closure_type == "partial"
+    assert first.end_dt == datetime(2026, 7, 4, 12, 0, tzinfo=NZ_TZ)
+
+    middle = [c for c in closures if c.start == date(2026, 7, 9)][0]
+    assert middle.end == date(2026, 7, 12)
+    assert middle.closure_type == "full"
+    assert middle.is_all_day  # no "until 12pm" leakage from the sentence before
+
+    last = [c for c in closures if c.start == date(2026, 7, 25)][0]
+    assert last.closure_type == "partial"
+    assert last.end_dt == datetime(2026, 7, 25, 12, 0, tzinfo=NZ_TZ)
+
+
+def test_undated_detail_sentence_attaches_to_previous(closures):
+    southern = closures_for_line(closures, "Southern Line")
+    partial_4_july = [c for c in southern if c.start == date(2026, 7, 4)][0]
+    assert "Rail buses replace trains" in partial_4_july.description
+
+
 def test_recent_past_dates_stay_in_current_year():
     html = """
     <main><h3>Southern Line</h3>
