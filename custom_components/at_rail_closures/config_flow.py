@@ -12,13 +12,30 @@ from homeassistant.config_entries import (
     OptionsFlow,
 )
 from homeassistant.core import callback
+from homeassistant.helpers import selector
 
-from .const import CONF_API_KEY, CONF_UPDATE_HOURS, DEFAULT_UPDATE_HOURS, DOMAIN
+from .const import (
+    CONF_API_KEY,
+    CONF_LINES,
+    CONF_UPDATE_HOURS,
+    DEFAULT_UPDATE_HOURS,
+    DOMAIN,
+)
 from .coordinator import async_validate_api_key
+from .parser import RAIL_LINES
+
+LINE_SELECTOR = selector.SelectSelector(
+    selector.SelectSelectorConfig(
+        options=list(RAIL_LINES),
+        multiple=True,
+        mode=selector.SelectSelectorMode.LIST,
+    )
+)
 
 USER_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_API_KEY): str,
+        vol.Optional(CONF_LINES, default=list(RAIL_LINES)): LINE_SELECTOR,
     }
 )
 
@@ -28,7 +45,8 @@ class ATRailClosuresConfigFlow(ConfigFlow, domain=DOMAIN):
 
     The AT API key is optional: without one the integration scrapes the
     planned closures web page only; with one it also merges in the official
-    GTFS-realtime service alerts feed.
+    GTFS-realtime service alerts feed. The line selection controls which
+    per-line sensors and calendars are created.
     """
 
     VERSION = 1
@@ -48,7 +66,11 @@ class ATRailClosuresConfigFlow(ConfigFlow, domain=DOMAIN):
                 if error:
                     errors["base"] = error
             if not errors:
-                options = {CONF_API_KEY: api_key} if api_key else {}
+                options: dict[str, Any] = {
+                    CONF_LINES: user_input.get(CONF_LINES, list(RAIL_LINES)),
+                }
+                if api_key:
+                    options[CONF_API_KEY] = api_key
                 return self.async_create_entry(
                     title="Auckland Rail Network", data={}, options=options
                 )
@@ -65,7 +87,7 @@ class ATRailClosuresConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class ATRailClosuresOptionsFlow(OptionsFlow):
-    """Options: update interval and the optional AT API key."""
+    """Options: update interval, AT API key, and which lines to track."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -79,8 +101,9 @@ class ATRailClosuresOptionsFlow(OptionsFlow):
                 if error:
                     errors["base"] = error
             if not errors:
-                options = {
+                options: dict[str, Any] = {
                     CONF_UPDATE_HOURS: user_input[CONF_UPDATE_HOURS],
+                    CONF_LINES: user_input.get(CONF_LINES, []),
                 }
                 if api_key:
                     options[CONF_API_KEY] = api_key
@@ -99,6 +122,10 @@ class ATRailClosuresOptionsFlow(OptionsFlow):
                         "suggested_value": current.get(CONF_API_KEY, "")
                     },
                 ): str,
+                vol.Optional(
+                    CONF_LINES,
+                    default=current.get(CONF_LINES, list(RAIL_LINES)),
+                ): LINE_SELECTOR,
             }
         )
         return self.async_show_form(

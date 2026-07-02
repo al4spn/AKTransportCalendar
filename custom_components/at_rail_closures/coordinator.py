@@ -18,13 +18,14 @@ from .alerts import NZ_TZ, combine_sources, parse_service_alerts
 from .const import (
     CLOSURES_URL,
     CONF_API_KEY,
+    CONF_LINES,
     CONF_UPDATE_HOURS,
     DEFAULT_UPDATE_HOURS,
     DOMAIN,
     REQUEST_HEADERS,
     SERVICE_ALERTS_URL,
 )
-from .parser import Closure, parse_closures
+from .parser import RAIL_LINES, Closure, parse_closures
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -88,6 +89,14 @@ class ATRailClosuresCoordinator(DataUpdateCoordinator[RailClosuresData]):
     @property
     def api_key(self) -> str | None:
         return self.config_entry.options.get(CONF_API_KEY) or None
+
+    @property
+    def enabled_lines(self) -> list[str]:
+        """The rail lines the user wants per-line entities for."""
+        selected = self.config_entry.options.get(CONF_LINES)
+        if selected is None:
+            return list(RAIL_LINES)
+        return [line for line in RAIL_LINES if line in selected]
 
     async def _fetch_website(self, session, reference: date) -> list[Closure]:
         async with asyncio.timeout(30):

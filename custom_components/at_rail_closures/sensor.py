@@ -24,7 +24,6 @@ from .const import (
 from .coordinator import ATRailConfigEntry
 from .entity import ATRailEntity
 from .parser import (
-    RAIL_LINES,
     Closure,
     active_closures,
     closures_for_line,
@@ -43,7 +42,9 @@ async def async_setup_entry(
         NetworkStatusSensor(coordinator),
         NextClosureSensor(coordinator),
     ]
-    entities.extend(LineStatusSensor(coordinator, line) for line in RAIL_LINES)
+    entities.extend(
+        LineStatusSensor(coordinator, line) for line in coordinator.enabled_lines
+    )
     async_add_entities(entities)
 
 

@@ -30,9 +30,12 @@ All entities belong to one **Auckland Rail Network** device:
 | `sensor.auckland_rail_network_next_closure` | timestamp | Start of the next planned closure — renders as "in 5 days" on tile cards. Title, lines, dates and description in attributes. |
 | `binary_sensor.auckland_rail_network_closure_active` | problem | On while any planned closure is in effect. Handy for conditional cards and automations. |
 | `calendar.auckland_rail_network_closures` | calendar | Every planned closure as an all-day event (closures spanning the same dates are merged into one event). |
+| `calendar.auckland_rail_network_southern_line_closures` (also `_eastern_`, `_western_`, `_onehunga_`) | calendar | That line's closures as their own calendar — handy for colour-coding lines on calendar cards. |
 
-The website is re-checked every 6 hours by default (configurable from the
-integration's **Configure** button, 1–24 hours).
+Which lines get per-line sensors and calendars is selectable (checkboxes) in
+the setup dialog and later from the integration's **Configure** button;
+deselecting a line removes its entities. The website is re-checked every
+6 hours by default (configurable, 1–24 hours).
 
 ## Installation
 
@@ -150,6 +153,23 @@ entities:
     color: '#e4002b'
 days_to_show: 60
 show_countdown: true
+```
+
+Or colour-code by line using the per-line calendars (AT line colours):
+
+```yaml
+type: custom:calendar-card-pro
+title: Planned rail closures
+entities:
+  - entity: calendar.auckland_rail_network_southern_line_closures
+    color: '#e4002b'
+  - entity: calendar.auckland_rail_network_eastern_line_closures
+    color: '#f9a825'
+  - entity: calendar.auckland_rail_network_western_line_closures
+    color: '#2e7d32'
+  - entity: calendar.auckland_rail_network_onehunga_line_closures
+    color: '#1565c0'
+days_to_show: 60
 ```
 
 ### Alert banner only when something is wrong
