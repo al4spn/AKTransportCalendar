@@ -70,6 +70,47 @@ def test_empty_and_malformed_payloads():
     assert parse_service_alerts({"entity": [{"id": "x"}, {"alert": {}}]}, TODAY) == []
 
 
+def test_full_closure_text_overrides_weak_effect_code():
+    # Regression: AT tagged the Matariki full-network closure alert with
+    # REDUCED_SERVICE; the explicit full-closure wording must win.
+    payload = {
+        "entity": [
+            {
+                "id": "matariki",
+                "alert": {
+                    "active_period": [{"start": 1783512000, "end": 1783857540}],
+                    "informed_entity": [
+                        {"route_id": "STH-201"},
+                        {"route_id": "EAST-201"},
+                        {"route_id": "WEST-201"},
+                        {"route_id": "ONE-201"},
+                    ],
+                    "effect": "REDUCED_SERVICE",
+                    "header_text": {
+                        "translation": [
+                            {
+                                "text": "Full Network Closure: Matariki Weekend Closures",
+                                "language": "en",
+                            }
+                        ]
+                    },
+                    "description_text": {
+                        "translation": [
+                            {
+                                "text": "All train lines are closed from Thursday 9 July to Sunday 12 July for maintenance.",
+                                "language": "en",
+                            }
+                        ]
+                    },
+                },
+            }
+        ]
+    }
+    closures = parse_service_alerts(payload, TODAY)
+    assert len(closures) == 1
+    assert closures[0].closure_type == "full"
+
+
 def test_combine_sources_prefers_alert_duplicates(closures):
     website = [
         # Same period/type/line as the alert full closure -> dropped.
