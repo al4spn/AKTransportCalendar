@@ -1,3 +1,5 @@
+<img src="custom_components/at_rail_closures/brand/icon@2x.png" alt="Icon" width="96" align="right"/>
+
 # Auckland Transport Rail Closures for Home Assistant
 
 A custom integration that tracks Auckland rail network closures and turns
